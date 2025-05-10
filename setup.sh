@@ -1,7 +1,7 @@
 #!/bin/sh
 
-if [ "$UID" -ne 0 ]; then
-    echo "This script must be run as root."
+if [ "$UID" -eq 0 ]; then
+    echo "This script must not be run as root."
     exit 1
 fi
 
@@ -16,13 +16,16 @@ fi
 set -ex
 # Basics
 
-apt update --yes
-apt dist-upgrade --yes
-apt install --yes etckeeper
-apt install --yes git fzf fd-find ripgrep vim zip jq
+sudo apt update --yes
+sudo apt dist-upgrade --yes
+sudo apt install --yes etckeeper
+sudo apt install --yes git fzf fd-find ripgrep vim zip jq
+echo '. /usr/share/doc/fzf/examples/key-bindings.bash' | sudo tee --append /etc/bash.bashrc
 
-apt install --yes python3-pip python3-virtualenv
-apt install --yes curl
+sudo apt install --yes python3-pip python3-virtualenv python3-ipython
+sudo apt install --yes curl
+sudo apt install --yes xdg-utils
+
 # make plocate not index 9p (wsl windows mounts)
 echo << EOF
 PRUNE_BIND_MOUNTS="yes"
@@ -32,29 +35,36 @@ PRUNEFS="NFS afs autofs binfmt_misc ceph cgroup cgroup2 cifs coda configfs curlf
 EOF
 apt install --yes plocate
 
-echo '. /usr/share/doc/fzf/examples/key-bindings.bash' >> /etc/bash.bashrc
 
 
 # Zoomer stuff
+sudo apt install docker.io
 
 curl -L https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" > /etc/apt/sources.list.d/hashicorp.list
 apt update --yes && apt install --yes terraform
 terraform -install-autocomplete
+cat > ~/.terraformrc << EOF
+plugin_cache_dir   = "$HOME/.terraform.d/plugin-cache/"
+disable_checkpoint = true
+EOF
 
 
 STABLE_VER=$(curl -L -s https://dl.k8s.io/release/stable.txt)
 curl -LO "https://dl.k8s.io/release/${STABLE_VER}/bin/linux/amd64/kubectl"
 echo "$(curl -L "https://dl.k8s.io/release/${STABLE_VER}/bin/linux/amd64/kubectl.sha256") kubectl" | sha256sum --check
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-rm kubectl
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && rm kubectl
+
 # kubectl completion
-echo "source <(kubectl completion bash)" >> /etc/bash.bashrc
+echo "source <(kubectl completion bash)" >> ~/.bash_aliases
 # kubectl aliases
-echo "alias k=kubectl" >> /etc/bash.bashrc
-echo "complete -F __start_kubectl k" >> /etc/bash.bashrc
+echo "alias k=kubectl" >> ~/.bash_aliases
+echo "complete -F __start_kubectl k" >> ~/.bashrc
 # kubectx
 sudo apt install --yes kubectx
+
+sudo snap install --classic helm
+helm completion bash | sudo tee /etc/bash_completion.d/helm > /dev/null
 
 # Snap :(
 sudo snap install aws-cli --classic
@@ -79,13 +89,33 @@ git config --global user.name "$FULL_NAME"
 git config --global user.signingkey "$GPG_KEY_ID"
 git config --global commit.gpgsign true
 git config --global core.editor "vim"
-# TODO: Hack
-ssh-keygen -t ecdsa -b 521 -f /home/$(id -un 1000)/.ssh/id_ed25519 -N "" -C "$UID@$(hostname)"
+ssh-keygen -t ecdsa -b 521 -f ~/.ssh/id_ed25519 -N "" -C "$USER@$(hostname)"
 
+
+# Useful as I mostly deal with code generated imagery & windows
+
+echo << EOF | sudo tee /usr/share/applications/vscode.desktop
+[Desktop Entry]
+Name=Visual Studio Code - URL Handler
+Comment=Code Editing. Redefined.
+GenericName=Text Editor
+Exec=code %U
+Icon=vscode
+Type=Application
+NoDisplay=true
+StartupNotify=true
+Categories=Utility;TextEditor;Development;IDE;
+MimeType=x-scheme-handler/vscode;
+Keywords=vscode;
+EOF
+
+sudo xdg-mime default vscode.desktop video/mp4
+sudo xdg-mime default vscode.desktop video/png
 
 echo "[*] Post Install steps:"
 echo "1. Add your gpg key to github: gpg --armor --export $GPG_KEY_ID"
 echo "2. Add your ssh key to github: cat /home/$(id -un 1000)/.ssh/id_ed25519.pub"
+
 
 
 set +ex
