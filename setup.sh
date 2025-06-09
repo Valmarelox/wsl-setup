@@ -19,7 +19,7 @@ set -ex
 sudo apt update --yes
 sudo apt dist-upgrade --yes
 sudo apt install --yes etckeeper
-sudo apt install --yes git fzf fd-find ripgrep vim zip jq
+sudo apt install --yes git fzf fd-find ripgrep vim zip jq htop
 echo '. /usr/share/doc/fzf/examples/key-bindings.bash' | sudo tee --append /etc/bash.bashrc
 
 sudo apt install --yes python3-pip python3-virtualenv python3-ipython
